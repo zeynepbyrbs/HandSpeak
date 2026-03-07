@@ -279,10 +279,11 @@ class HandSpeakApp(ctk.CTk):
         self.fps_label.pack(side="right")
 
         # Camera canvas
-        cam_container = ctk.CTkFrame(cam_card, fg_color=COLORS["camera_bg"], corner_radius=12)
-        cam_container.pack(fill="both", expand=True, padx=16, pady=(10, 16))
+        self.cam_container = ctk.CTkFrame(cam_card, fg_color=COLORS["camera_bg"], corner_radius=12)
+        self.cam_container.pack(fill="both", expand=True, padx=16, pady=(10, 16))
+        self.cam_container.pack_propagate(False)
 
-        self.camera_label = ctk.CTkLabel(cam_container, text="")
+        self.camera_label = ctk.CTkLabel(self.cam_container, text="")
         self.camera_label.pack(fill="both", expand=True, padx=4, pady=4)
 
         # Alan boşken kamerayı kapatan resmi yerleştir
@@ -494,8 +495,8 @@ class HandSpeakApp(ctk.CTk):
     def _yer_tutucu_ayarla(self):
         """Kamera yer tutucu görüntüsünü ekrana basar."""
         self.update_idletasks()
-        w = max(self.camera_label.winfo_width(), 500)
-        h = max(self.camera_label.winfo_height(), 340)
+        w = max(self.cam_container.winfo_width() - 8, 500)
+        h = max(self.cam_container.winfo_height() - 8, 340)
         pil_resim = kamera_yer_tutucu_olustur(w, h)
         self._kamera_fotosu = ctk.CTkImage(light_image=pil_resim, size=(w, h))
         self.camera_label.configure(image=self._kamera_fotosu)
@@ -648,8 +649,8 @@ class HandSpeakApp(ctk.CTk):
 
             # Ekrana kamera boyutlarına göre uyacak şekilde yeniden boyutlandır
             self.update_idletasks()
-            lw = max(self.camera_label.winfo_width(), 500)
-            lh = max(self.camera_label.winfo_height(), 340)
+            lw = max(self.cam_container.winfo_width() - 8, 500)
+            lh = max(self.cam_container.winfo_height() - 8, 340)
             pil_resmi = pil_resmi.resize((lw, lh), Image.LANCZOS)
 
             self._kamera_fotosu = ctk.CTkImage(light_image=pil_resmi, size=(lw, lh))

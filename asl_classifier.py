@@ -134,13 +134,29 @@ def asl_siniflandir(isaret_noktalari) -> tuple[str, float]:
     isaret_orta_mesafe = _mesafe(noktalar[ISARET_UC], noktalar[ORTA_UC])
     isaret_orta_ayrik = isaret_orta_mesafe > 0.06
 
-    # ── Dikey yönelim kontrolleri ────────────────────────────────────────
+    # ── Yönelim ve Ek Mesafeler ──────────────────────────────────────────
     el_yukari_bakiyor = noktalar[ORTA_UC].y < noktalar[BILEK].y
     el_asagi_bakiyor = noktalar[ORTA_UC].y > noktalar[BILEK].y
+    isaret_yatay = abs(noktalar[ISARET_UC].y - noktalar[ISARET_MCP].y) < 0.07
+
+    bas_isaret_mesafe = _mesafe(noktalar[BASPARMAK_UC], noktalar[ISARET_UC])
+    bas_orta_mesafe = _mesafe(noktalar[BASPARMAK_UC], noktalar[ORTA_UC])
 
     # ═══════════════════════════════════════════════════════════════════════
     #  HARF SINIFLANDIRMA KURALLARI
     # ═══════════════════════════════════════════════════════════════════════
+
+    # ── C: Kıvrımlı el (C şekli) ─────────────────────────────────────────
+    # Tüm parmaklar C şeklinde kavis yapar. Parmakların boğumlarından net açık/kapalı
+    # okunamayabileceği için başparmak ile aralarındaki mesafelere bakılır.
+    if (0.05 < bas_isaret_mesafe < 0.16) and (0.05 < bas_orta_mesafe < 0.18):
+        # O harfi temas gerektirir, O'dan ayıralım
+        if not bas_isaret_temas:
+            # G veya H yataydır, onlardan da ayıralım
+            if not isaret_yatay:
+                # Tam kapanmış yumruklar (E, A, S) olmaması için:
+                if basparmak or isaret or orta:
+                    return ("C", 0.85)
 
     # ── A: Başparmak kenarındayken kapanmış yumruk ────────────────────────
     if (not isaret and not orta and not yuzuk and not serce
@@ -150,15 +166,9 @@ def asl_siniflandir(isaret_noktalari) -> tuple[str, float]:
     # ── B: 4 parmak yukarıda, başparmak avuç içinde yatay ────────────────
     if (isaret and orta and yuzuk and serce
             and not basparmak and el_yukari_bakiyor):
-        return ("B", 0.88)
-
-    # ── C: Kıvrımlı el (tüm parmaklar kısmen açık, C şekli) ──────────────
-    # Tüm parmakların orta açıklıkta ve başparmağın dışta olmasıyla belirlenir
-    if (basparmak and isaret and not orta and not yuzuk and not serce):
-        # Başparmak ve işaret parmağının C şekli oluşturduğundan emin ol
-        bas_isaret_m = _mesafe(noktalar[BASPARMAK_UC], noktalar[ISARET_UC])
-        if 0.06 < bas_isaret_m < 0.15:
-            return ("C", 0.75)
+        # B'de işaret parmağı ucuyla başparmak ucu daha uzaktır.
+        if bas_isaret_mesafe > 0.14:
+            return ("B", 0.88)
 
     # ── D: İşaret parmağı yukarıda, diğerleri kapalı, başparmak ortaya temas eder ──
     if (isaret and not orta and not yuzuk and not serce
@@ -176,7 +186,6 @@ def asl_siniflandir(isaret_noktalari) -> tuple[str, float]:
 
     # ── G: İşaret parmağı yatay işaret eder, başparmak paraleldir ────────
     # El yan yatay durur
-    isaret_yatay = abs(noktalar[ISARET_UC].y - noktalar[ISARET_MCP].y) < 0.06
     if (isaret and not orta and not yuzuk and not serce
             and isaret_yatay and basparmak):
         return ("G", 0.78)
