@@ -3,6 +3,7 @@ HandSpeak — ASL (American Sign Language) Recognition Desktop Application
 A modern, minimal desktop UI for real-time ASL sign-language recognition.
 """
 
+import tkinter as tk
 import customtkinter as ctk
 from PIL import Image, ImageDraw, ImageFont, ImageTk
 import cv2
@@ -278,15 +279,21 @@ class HandSpeakApp(ctk.CTk):
         )
         self.fps_label.pack(side="right")
 
-        # Camera canvas
+        # Camera canvas — Canvas boyutu sabit kalır, içeriğe göre büyümez
         cam_container = ctk.CTkFrame(cam_card, fg_color=COLORS["camera_bg"], corner_radius=12)
         cam_container.pack(fill="both", expand=True, padx=16, pady=(10, 16))
+        cam_container.pack_propagate(False)  # ← container'ın çocuğa göre büyümesini engelle
 
-        self.camera_label = ctk.CTkLabel(cam_container, text="")
-        self.camera_label.pack(fill="both", expand=True, padx=4, pady=4)
+        self.camera_canvas = tk.Canvas(
+            cam_container,
+            bg=COLORS["camera_bg"],
+            highlightthickness=0,
+            bd=0,
+        )
+        self.camera_canvas.pack(fill="both", expand=True, padx=4, pady=4)
 
-        # Alan boşken kamerayı kapatan resmi yerleştir
-        self._yer_tutucu_ayarla()
+        # Alan boşken yer tutucu resmi sonraki çerçevede yerleştir (layout oturandan sonra)
+        self.after(150, self._yer_tutucu_ayarla)
 
         # ── Prediction panel ─────────────────────────────────────────────
         pred_card = ctk.CTkFrame(
@@ -489,16 +496,28 @@ class HandSpeakApp(ctk.CTk):
         ).pack(anchor="w", pady=(4, 0))
 
     # ──────────────────────────────────────────────────────────────────────
-    #  KAMERA YER TUTUCUSU
+    #  KAMERA CANVAS YARDIMCI FONKSİYONLARI
     # ──────────────────────────────────────────────────────────────────────
-    def _yer_tutucu_ayarla(self):
-        """Kamera yer tutucu görüntüsünü ekrana basar."""
+    def _canvas_boyut(self):
+        """Canvas'ın mevcut piksel boyutunu döndürür. Layout hazır değilse varsayılan verir."""
         self.update_idletasks()
-        w = max(self.camera_label.winfo_width(), 500)
-        h = max(self.camera_label.winfo_height(), 340)
+        w = self.camera_canvas.winfo_width()
+        h = self.camera_canvas.winfo_height()
+        return max(w, 10), max(h, 10)
+
+    def _canvas_resim_goster(self, pil_resim: Image.Image):
+        """PIL görüntüsünü canvas boyutuna göre yeniden boyutlandırıp çizer."""
+        w, h = self._canvas_boyut()
+        pil_resim = pil_resim.resize((w, h), Image.LANCZOS)
+        self._kamera_fotosu = ImageTk.PhotoImage(pil_resim)
+        self.camera_canvas.delete("all")
+        self.camera_canvas.create_image(0, 0, anchor="nw", image=self._kamera_fotosu)
+
+    def _yer_tutucu_ayarla(self):
+        """Kamera yer tutucu görüntüsünü canvas'a basar."""
+        w, h = self._canvas_boyut()
         pil_resim = kamera_yer_tutucu_olustur(w, h)
-        self._kamera_fotosu = ctk.CTkImage(light_image=pil_resim, size=(w, h))
-        self.camera_label.configure(image=self._kamera_fotosu)
+        self._canvas_resim_goster(pil_resim)
 
     # ──────────────────────────────────────────────────────────────────────
     #  AKSİYONLAR
@@ -643,17 +662,9 @@ class HandSpeakApp(ctk.CTk):
                 if self._elsiz_sayac > 15:  # ~0.5 saniye el yoksa ekranı temizle
                     self._elsiz_durumu_goster()
 
-            # Görüntülenmesi için kareyi PIL resmine dönüştür
+            # Görüntülenmesi için kareyi PIL resmine dönüştür ve canvas'a çiz
             pil_resmi = Image.fromarray(cerceve_rgb)
-
-            # Ekrana kamera boyutlarına göre uyacak şekilde yeniden boyutlandır
-            self.update_idletasks()
-            lw = max(self.camera_label.winfo_width(), 500)
-            lh = max(self.camera_label.winfo_height(), 340)
-            pil_resmi = pil_resmi.resize((lw, lh), Image.LANCZOS)
-
-            self._kamera_fotosu = ctk.CTkImage(light_image=pil_resmi, size=(lw, lh))
-            self.camera_label.configure(image=self._kamera_fotosu)
+            self._canvas_resim_goster(pil_resmi)
 
             # FPS Sayacı 
             self._kare_sayisi += 1
