@@ -12,7 +12,7 @@ import time
 import math
 import threading
 
-from asl_classifier import asl_siniflandir
+from asl_classifier import asl_siniflandir, asl_debug_bilgisi
 
 # ─── Theme & Color Palette ───────────────────────────────────────────────────
 COLORS = {
@@ -634,7 +634,11 @@ class HandSpeakApp(ctk.CTk):
                     # ASL harfini sınıflandır
                     harf, guven_degeri = asl_siniflandir(el_isaret_noktalari.landmark)
 
-                    if harf != "?" and guven_degeri >= 0.80:
+                    # Debug overlay: parmak durumlarını kare üzerine çiz
+                    debug = asl_debug_bilgisi(el_isaret_noktalari.landmark)
+                    self._debug_overlay_ciz(cerceve_rgb, debug)
+
+                    if harf != "?" and guven_degeri >= 0.65:
                         self._tahmin_tamponu.append(harf)
                         self._elsiz_sayac = 0
 
@@ -677,6 +681,28 @@ class HandSpeakApp(ctk.CTk):
 
         # Sonraki kareyi çizilmesi için programla (~33ms ≈ 30 FPS)
         self._kamera_dongu_id = self.after(33, self._kamera_karesini_guncelle)
+
+    @staticmethod
+    def _debug_overlay_ciz(frame, debug):
+        """Kamera karesine parmak durumlarını ve tahmini metin olarak çizer."""
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        olcek = 0.45
+        kalinlik = 1
+        golge = 2
+        y = 22
+
+        satirlar = [
+            f"Isaret: {debug['parmaklar']['isaret']}",
+            f"Orta:   {debug['parmaklar']['orta']}",
+            f"Yuzuk:  {debug['parmaklar']['yuzuk']}",
+            f"Serce:  {debug['parmaklar']['serce']}",
+            f"Bas.P:  {debug['basparmak']}",
+            f"Tahmin: {debug['tahmin']}  %{debug['guven'] * 100:.0f}",
+        ]
+        for metin in satirlar:
+            cv2.putText(frame, metin, (8, y), font, olcek, (0, 0, 0), golge, cv2.LINE_AA)
+            cv2.putText(frame, metin, (8, y), font, olcek, (255, 255, 255), kalinlik, cv2.LINE_AA)
+            y += 18
 
     def _elsiz_durumu_goster(self):
         """Kamerada hiçbir el bulunmadığında arayüzü günceller."""
