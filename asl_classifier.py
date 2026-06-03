@@ -89,6 +89,36 @@ def classify_asl(hand_landmarks):
     # El yatay mı? (G, H harfleri için)
     is_horizontal = abs(n[INDEX_TIP].x - n[INDEX_MCP].x) > abs(n[INDEX_TIP].y - n[INDEX_MCP].y)
 
+    # Parmaklar avuca kıvrık mı? (uç, PIP ekleminin altında)
+    index_curled = n[INDEX_TIP].y > n[INDEX_PIP].y
+    middle_curled = n[MIDDLE_TIP].y > n[MIDDLE_PIP].y
+
+    # Parmaklar düz/gergin mi (yön bağımsız)
+    index_straight = index_angle > 120
+    middle_straight = middle_angle > 120
+
+    # El aşağı yönlü mü? (P, Q için)
+    pointing_down = n[INDEX_TIP].y > n[INDEX_MCP].y
+
+    # Başparmak dik yukarıda mı?
+    thumb_up = n[THUMB_TIP].y < n[THUMB_MCP].y
+
+    # Başparmak işaret ile orta parmak arasında mı? (K, P, T için)
+    thumb_between_im = (
+        min(n[INDEX_MCP].x, n[MIDDLE_MCP].x)
+        < n[THUMB_TIP].x
+        < max(n[INDEX_MCP].x, n[MIDDLE_MCP].x)
+    )
+
+    # İşaret ve orta parmak çapraz mı? (R için)
+    index_mid_cross = (
+        (n[INDEX_TIP].x - n[MIDDLE_TIP].x)
+        * (n[INDEX_MCP].x - n[MIDDLE_MCP].x)
+    ) < 0
+
+    # Başparmak ucu avuçta gömülü mü? (M, N için)
+    thumb_tucked_low = n[THUMB_TIP].y > n[MIDDLE_PIP].y
+
     # =========================================================
     # 3. ESNEK PUANLAMA MOTORU (FUZZY LOGIC)
     # =========================================================
@@ -146,6 +176,50 @@ def classify_asl(hand_landmarks):
 
     # 5 HARFİ: Her şey açık ve gergin
     scores["5"] = 0.6 * (open_count == 4) + 0.4 * thumb_is_out
+
+    # E HARFİ: Tüm parmaklar avuca kıvrık, başparmak önde tutuk
+    scores["E"] = 0.5 * (open_count == 0 and not thumb_is_out) + 0.5 * (
+        index_curled and middle_curled and n[THUMB_TIP].y > n[INDEX_PIP].y
+    )
+
+    # J HARFİ: Serçe açık (I duruşu, hareketle çizilir — statik yaklaşım)
+    scores["J"] = 0.5 * (pinky_open and open_count == 1) + 0.3 * (not thumb_is_out) + 0.2 * is_horizontal
+
+    # K HARFİ: İşaret + orta açık, başparmak ikisinin arasında dik
+    scores["K"] = 0.6 * (index_open and middle_open and open_count == 2 and thumb_up) + 0.4 * thumb_between_im
+
+    # M HARFİ: Yumruk, başparmak üç parmağın altında gömülü (serçe tarafına yakın)
+    scores["M"] = 0.5 * (open_count == 0 and not thumb_is_out) + 0.5 * (
+        thumb_tucked_low and n[THUMB_TIP].x > n[RING_MCP].x
+    )
+
+    # N HARFİ: Yumruk, başparmak iki parmağın altında gömülü (orta-yüzük arası)
+    scores["N"] = 0.5 * (open_count == 0 and not thumb_is_out) + 0.5 * (
+        thumb_tucked_low and n[MIDDLE_MCP].x < n[THUMB_TIP].x <= n[RING_MCP].x
+    )
+
+    # P HARFİ: İşaret + orta düz ve aşağı yönlü, başparmak arada (K'nın aşağı hali)
+    scores["P"] = 0.5 * (index_straight and middle_straight and pointing_down) + 0.3 * (
+        not ring_open and not pinky_open
+    ) + 0.2 * thumb_between_im
+
+    # Q HARFİ: İşaret düz ve aşağı yönlü, başparmak dışarıda (G'nin aşağı hali)
+    scores["Q"] = 0.5 * (index_straight and pointing_down and not middle_straight) + 0.3 * (
+        not ring_open and not pinky_open
+    ) + 0.2 * thumb_is_out
+
+    # R HARFİ: İşaret + orta açık ve çapraz
+    scores["R"] = 0.6 * (index_open and middle_open and open_count == 2) + 0.4 * index_mid_cross
+
+    # T HARFİ: Yumruk, başparmak işaret ile orta parmak arasında dik
+    scores["T"] = 0.5 * (open_count == 0 and not thumb_is_out) + 0.5 * (
+        thumb_between_im and n[THUMB_TIP].y < n[INDEX_PIP].y
+    )
+
+    # Z HARFİ: Tek işaret parmağı açık (hareketle Z çizilir — statik yaklaşım)
+    scores["Z"] = 0.5 * (index_open and open_count == 1 and not is_horizontal) + 0.3 * (
+        not thumb_index_touch
+    ) + 0.2 * (not thumb_is_out)
 
     # =========================================================
     # 4. KARAR VE GÜVENLİK EŞİĞİ

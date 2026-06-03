@@ -281,6 +281,15 @@ class HandSpeakApp(ctk.CTk):
             pady=20
         )
 
+        self.fps_label = ctk.CTkLabel(
+            right,
+            text="FPS: —",
+            font=ctk.CTkFont(size=12),
+            text_color=COLORS["text_light"]
+        )
+
+        self.fps_label.pack(pady=(0, 10))
+
         self.show_placeholder()
 
     def build_footer(self):
@@ -327,6 +336,17 @@ class HandSpeakApp(ctk.CTk):
         self.stop_btn.pack(
             side="left"
         )
+
+        ctk.CTkButton(
+            footer,
+            text="🗑 Temizle",
+            command=self.clear_history,
+            fg_color=COLORS["card_border"],
+            text_color=COLORS["text_mid"],
+            hover_color="#D1D5DB",
+            width=130,
+            height=45
+        ).pack(side="left", padx=12)
 
     # =====================================================
     # CAMERA
@@ -397,6 +417,14 @@ class HandSpeakApp(ctk.CTk):
 
         success, frame = self.camera.read()
 
+        if not success:
+            self.stop_camera()
+            self.status_label.configure(
+                text="Kamera bağlantısı kesildi",
+                text_color=COLORS["accent_red"]
+            )
+            return
+
         if success:
 
             frame = cv2.flip(frame, 1)
@@ -415,6 +443,7 @@ class HandSpeakApp(ctk.CTk):
                 for hand_landmarks in results.multi_hand_landmarks:
 
                     hand_detected = True
+                    self.no_hand_counter = 0
 
                     self.mp_draw.draw_landmarks(
                         rgb,
@@ -533,6 +562,20 @@ class HandSpeakApp(ctk.CTk):
 
         self.last_stable_letter = "?"
 
+    def clear_history(self):
+
+        self.history.clear()
+        self.prediction_buffer.clear()
+        self.last_stable_letter = "?"
+
+        self.history_label.configure(
+            text="Henüz harf algılanmadı"
+        )
+
+        self.letter_label.configure(text="—")
+        self.confidence_bar.set(0)
+        self.confidence_label.configure(text="0%")
+
     # =====================================================
     # DEBUG
     # =====================================================
@@ -633,8 +676,8 @@ class HandSpeakApp(ctk.CTk):
 
             fps = self.frame_counter / elapsed
 
-            self.title(
-                f"HandSpeak — {fps:.0f} FPS"
+            self.fps_label.configure(
+                text=f"FPS: {fps:.0f}"
             )
 
             self.frame_counter = 0
