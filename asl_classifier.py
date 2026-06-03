@@ -103,18 +103,19 @@ def classify_asl(hand_landmarks):
     # Başparmak dik yukarıda mı?
     thumb_up = n[THUMB_TIP].y < n[THUMB_MCP].y
 
-    # Başparmak işaret ile orta parmak arasında mı? (K, P, T için)
+    # Başparmak eklem hattının üzerinde mi? (K tespiti için thumb_up'tan daha güvenilir)
+    thumb_high = n[THUMB_TIP].y < n[INDEX_MCP].y
+
+    # Başparmak işaret ile orta parmak arasında mı? (K, P, T için) — MCP x ile karşılaştır
     thumb_between_im = (
         min(n[INDEX_MCP].x, n[MIDDLE_MCP].x)
         < n[THUMB_TIP].x
         < max(n[INDEX_MCP].x, n[MIDDLE_MCP].x)
     )
 
-    # İşaret ve orta parmak çapraz mı? (R için)
-    index_mid_cross = (
-        (n[INDEX_TIP].x - n[MIDDLE_TIP].x)
-        * (n[INDEX_MCP].x - n[MIDDLE_MCP].x)
-    ) < 0
+    # İşaret parmağı diğerlerinden belirgin şekilde daha açık mı? (X tespiti için)
+    other_avg_angle = (middle_angle + ring_angle + pinky_angle) / 3
+    index_more_open_than_others = index_angle > other_avg_angle + 20
 
     # Başparmak ucu avuçta gömülü mü? (M, N için)
     thumb_tucked_low = n[THUMB_TIP].y > n[MIDDLE_PIP].y
@@ -131,8 +132,8 @@ def classify_asl(hand_landmarks):
     index_middle_dist = math.sqrt((n[INDEX_TIP].x - n[MIDDLE_TIP].x)**2 + (n[INDEX_TIP].y - n[MIDDLE_TIP].y)**2)
     scores["B"] = 0.7 * (open_count == 4) + 0.3 * (index_middle_dist < ref * 0.35 and not thumb_is_out)
 
-    # C HARFİ: Avuç içi pençe gibi yarı açık
-    scores["C"] = 0.7 * (half_count >= 3) + 0.3 * (not thumb_index_touch)
+    # C HARFİ: Orta ve yüzük dahil en az 3 parmak yarı bükük (X'ten ayırt için middle+ring şart)
+    scores["C"] = 0.7 * (half_count >= 3 and middle_half and ring_half) + 0.3 * (not thumb_index_touch)
 
     # D HARFİ: Sadece işaret parmağı açık, başparmak ortada kenetli
     scores["D"] = 0.6 * (index_open and open_count == 1) + 0.4 * (thumb_middle_touch or thumb_index_touch)
@@ -162,14 +163,14 @@ def classify_asl(hand_landmarks):
     finger_gap = index_middle_dist / hand_width
     scores["U"] = 0.7 * (index_open and middle_open and open_count == 2) + 0.3 * (finger_gap < 0.38)
 
-    # V HARFİ: İşaret ve orta parmak açık ve AYRIK
-    scores["V"] = 0.7 * (index_open and middle_open and open_count == 2) + 0.3 * (finger_gap >= 0.38)
+    # V HARFİ: İşaret ve orta parmak açık ve AYRIK, başparmak eklem hattının altında
+    scores["V"] = 0.5 * (index_open and middle_open and open_count == 2) + 0.3 * (finger_gap >= 0.38) + 0.2 * (not thumb_high)
 
     # W HARFİ: 3 parmak açık ve ayrık
     scores["W"] = 1.0 if (index_open and middle_open and ring_open and not pinky_open) else 0.0
 
-    # X HARFİ: İşaret parmağı kanca gibi bükük, diğerleri kapalı
-    scores["X"] = 0.7 * (index_half and open_count == 0) + 0.3 * (half_count == 1)
+    # X HARFİ: İşaret diğerlerinden belirgin açık/kıvrık, tümü açık değil
+    scores["X"] = 0.6 * (index_curled and open_count == 0) + 0.4 * index_more_open_than_others
 
     # Y HARFİ: Başparmak ve serçe parmak açık
     scores["Y"] = 0.6 * (pinky_open and thumb_is_out) + 0.4 * (open_count == 1)
@@ -185,8 +186,8 @@ def classify_asl(hand_landmarks):
     # J HARFİ: Serçe açık (I duruşu, hareketle çizilir — statik yaklaşım)
     scores["J"] = 0.5 * (pinky_open and open_count == 1) + 0.3 * (not thumb_is_out) + 0.2 * is_horizontal
 
-    # K HARFİ: İşaret + orta açık, başparmak ikisinin arasında dik
-    scores["K"] = 0.6 * (index_open and middle_open and open_count == 2 and thumb_up) + 0.4 * thumb_between_im
+    # K HARFİ: İşaret + orta açık, başparmak eklem hattının üzerinde (thumb_high daha güvenilir)
+    scores["K"] = 0.4 * (index_open and middle_open and open_count == 2) + 0.4 * thumb_high + 0.2 * (not thumb_is_out)
 
     # M HARFİ: Yumruk, başparmak üç parmağın altında gömülü (serçe tarafına yakın)
     scores["M"] = 0.5 * (open_count == 0 and not thumb_is_out) + 0.5 * (
@@ -208,8 +209,9 @@ def classify_asl(hand_landmarks):
         not ring_open and not pinky_open
     ) + 0.2 * thumb_is_out
 
-    # R HARFİ: İşaret + orta açık ve çapraz
-    scores["R"] = 0.6 * (index_open and middle_open and open_count == 2) + 0.4 * index_mid_cross
+    # R HARFİ: İşaret + orta açık ve çapraz — çaprazda uçlar birbirine yakın (V'de uzak)
+    r_crossing = finger_gap < 0.20
+    scores["R"] = 0.5 * (index_open and middle_open and open_count == 2) + 0.5 * r_crossing
 
     # T HARFİ: Yumruk, başparmak işaret ile orta parmak arasında dik
     scores["T"] = 0.5 * (open_count == 0 and not thumb_is_out) + 0.5 * (
